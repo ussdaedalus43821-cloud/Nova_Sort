@@ -1,0 +1,246 @@
+# sort.nova - Nova_Sort: sort the files of one folder into category folders by extension.
+#
+# It works on the folder it is started in ("."), and it only ever moves a file (rename) into a
+# category folder inside that folder. It never deletes, overwrites, copies or edits a file.
+#
+# Run under the `restricted` profile with `files.read` and `files.write` granted for that folder
+# and nothing else (host.py does this). With only `files.read` it is a dry run: the names it would
+# need to move anything are not defined, so it can print a plan and cannot act on it.
+#
+# Nothing here uses `remove`, `delete`, `write`, `copy` or the file form of `append`; the
+# sandbox hands all of them over with `files.write` (docs/GAPS.md G-027), so tests/test_safety.py
+# fails if one of them ever appears in this file.
+
+let CATEGORIES = [
+    ["Images", ["jpg", "jpeg", "png", "gif", "heic", "heif", "webp", "tif", "tiff", "bmp", "svg", "raw", "cr2", "nef", "dng", "ico"]],
+    ["Documents", ["pdf", "doc", "docx", "odt", "rtf", "txt", "md", "pages", "xls", "xlsx", "csv", "numbers", "ppt", "pptx", "key", "epub"]],
+    ["Archives", ["zip", "tar", "gz", "tgz", "bz2", "xz", "7z", "rar", "zst"]],
+    ["Audio", ["mp3", "wav", "aac", "flac", "m4a", "ogg", "aiff"]],
+    ["Video", ["mp4", "mov", "mkv", "avi", "webm", "m4v", "wmv"]],
+    ["Installers", ["dmg", "pkg", "iso", "exe", "msi", "deb", "rpm", "apk"]],
+    ["Code", ["py", "nova", "js", "ts", "json", "html", "css", "sh", "c", "h", "cpp", "java", "go", "rs", "swift", "yaml", "yml", "xml", "sql"]]
+]
+let REVIEW = "review"
+
+# A file that is still being downloaded or written is not finished: leave it where it is.
+let UNFINISHED = ["crdownload", "part", "download", "tmp", "opdownload", "partial"]
+
+let category_of = {}
+let category_folders = {}
+for entry in CATEGORIES {
+    category_folders[lower(entry[0])] = true
+    for ext in entry[1] {
+        category_of[ext] = entry[0]
+    }
+}
+category_folders[REVIEW] = true
+
+# There is no way to ask which capabilities were granted, so a name that only `files.write` defines
+# is tried: `rename` is "undefined name" under a read-only grant (G-029).
+def may_write() {
+    try {
+        rename
+        return true
+    } catch e {
+        return false
+    }
+}
+
+# There is no isdir() (G-030): a folder is a path `listdir` accepts. A file, a path outside the
+# grant and a broken link all fail the same way, and all mean "do not touch".
+def is_folder(path) {
+    try {
+        listdir(path)
+        return true
+    } catch e {
+        return false
+    }
+}
+
+# There is no splitext()/basename() (G-031): the extension is what follows the last dot.
+# "a.tar.gz" has the extension "gz", a name with no dot, or one that ends in a dot, has none.
+def split_name(name) {
+    let parts = split(name, ".")
+    let last = len(parts) - 1
+    if last < 1 or parts[last] == "" {
+        return [name, ""]
+    }
+    return [join(parts[:last], "."), parts[last]]
+}
+
+# A symbolic link that leads outside the folder is outside the grant, so the sandbox refuses every
+# function on it. It cannot be told from a plain file otherwise (G-032), so it is probed first, and
+# the dry run and the real run then agree about it.
+def reachable(path) {
+    try {
+        exists(path)
+        return true
+    } catch e {
+        return false
+    }
+}
+
+def kind_of(folder) {
+    if not exists(folder) {
+        return "none"
+    }
+    if is_folder(folder) {
+        return "folder"
+    }
+    return "file"
+}
+
+# The lower-case names already in a folder, read once. Names compare without case because the
+# file system of a Mac does (a.JPG and a.jpg cannot sit side by side).
+let listings = {}
+def names_in(folder) {
+    if not (folder in listings) {
+        let names = {}
+        if is_folder(folder) {
+            for n in listdir(folder) {
+                names[lower(n)] = true
+            }
+        }
+        listings[folder] = names
+    }
+    return listings[folder]
+}
+
+# rename() replaces a file that is already at the new name, without a word (G-028), so a name that
+# is taken is never used: "photo.jpg" becomes "photo (2).jpg", then "photo (3).jpg".
+def free_name(folder, name) {
+    let taken = names_in(folder)
+    let parts = split_name(name)
+    let candidate = name
+    let n = 2
+    while lower(candidate) in taken {
+        candidate = parts[0] + " (" + str(n) + ")"
+        if parts[1] != "" {
+            candidate = candidate + "." + parts[1]
+        }
+        n = n + 1
+        if n > 10000 {
+            return ""
+        }
+    }
+    taken[lower(candidate)] = true
+    return candidate
+}
+
+def line(verb, text) {
+    print("  " + verb + " " * (8 - len(verb)) + text)
+}
+
+let apply = may_write()
+if apply {
+    print("Nova_Sort: moving files (files.read and files.write granted)")
+} else {
+    print("Nova_Sort: DRY RUN. Nothing is moved, and with only files.read granted nothing could be.")
+}
+
+let folder_state = {}
+let counts = {}
+let order = []
+let moved = 0
+let skipped = 0
+let failed = 0
+
+for name in listdir(".") {
+    if name[:1] == "." {
+        line("skip", name + "  (hidden)")
+        skipped = skipped + 1
+    } else if not reachable(name) {
+        line("skip", name + "  (outside this folder, probably a link)")
+        skipped = skipped + 1
+    } else if is_folder(name) {
+        line("skip", name + "  (folder)")
+        skipped = skipped + 1
+    } else {
+        let parts = split_name(name)
+        let ext = lower(parts[1])
+        if ext in UNFINISHED {
+            line("skip", name + "  (unfinished download)")
+            skipped = skipped + 1
+        } else {
+            let folder = REVIEW
+            if ext in category_of {
+                folder = category_of[ext]
+            }
+            if not (folder in folder_state) {
+                folder_state[folder] = kind_of(folder)
+                if folder_state[folder] == "none" {
+                    if apply {
+                        try {
+                            mkdir(folder)
+                            line("create", folder + "/")
+                        } catch e {
+                            folder_state[folder] = "failed"
+                            line("FAILED", "could not create " + folder + "/  (" + str(e) + ")")
+                        }
+                    } else {
+                        line("create", folder + "/")
+                    }
+                }
+            }
+            if folder_state[folder] == "file" {
+                line("skip", name + "  (a file named " + folder + " is in the way)")
+                skipped = skipped + 1
+            } else if folder_state[folder] == "failed" {
+                line("skip", name + "  (" + folder + "/ could not be created)")
+                skipped = skipped + 1
+            } else {
+                let new_name = free_name(folder, name)
+                let note = ""
+                if new_name != name {
+                    note = "  (name was taken)"
+                }
+                let target = folder + "/" + new_name
+                if new_name == "" {
+                    line("skip", name + "  (no free name in " + folder + "/)")
+                    skipped = skipped + 1
+                } else if apply {
+                    try {
+                        if exists(target) {
+                            line("skip", name + "  (" + target + " appeared; left alone)")
+                            skipped = skipped + 1
+                        } else {
+                            rename(name, target)
+                            line("moved", name + "  ->  " + target + note)
+                            moved = moved + 1
+                            if not (folder in counts) {
+                                counts[folder] = 0
+                                order = order + [folder]
+                            }
+                            counts[folder] = counts[folder] + 1
+                        }
+                    } catch e {
+                        line("FAILED", name + "  (" + str(e) + ")")
+                        failed = failed + 1
+                    }
+                } else {
+                    line("would", name + "  ->  " + target + note)
+                    moved = moved + 1
+                    if not (folder in counts) {
+                        counts[folder] = 0
+                        order = order + [folder]
+                    }
+                    counts[folder] = counts[folder] + 1
+                }
+            }
+        }
+    }
+}
+
+let parts_text = []
+for folder in order {
+    parts_text = parts_text + [folder + " " + str(counts[folder])]
+}
+let verb = "would move"
+if apply {
+    verb = "moved"
+}
+print("")
+print("Summary: " + verb + " " + str(moved) + " files (" + join(parts_text, ", ") + "), skipped " + str(skipped) + ", failed " + str(failed))
+if not apply {
+    print("To move them, run again with --apply.")
+}
