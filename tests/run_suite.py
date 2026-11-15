@@ -5,6 +5,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STEPS = [
     ("behaviour: dry run, apply, collisions, links, on VM, tree-walker and self-hosted", ["tests.test_sort"]),
     ("safety: never deletes, the sandbox, and the gap probes", ["tests.test_safety"]),
+    ("chaos: a 255-character name, a link loop, files that cannot be moved", ["tests.test_chaos"]),
 ]
 failed = False
 for title, modules in STEPS:
