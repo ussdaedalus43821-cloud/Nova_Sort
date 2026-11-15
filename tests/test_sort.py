@@ -1,6 +1,7 @@
 """Behaviour of Nova_Sort on a messy folder, on every engine. Run: python3 -m unittest tests.test_sort -v"""
 import os, unittest
 
+from tests.common import HOST as HOST_PATH
 from tests.common import (EXPECTED, STAYS, cleanup, contents, make_fixture, run_bootstrap, run_host,
                           snapshot, text)
 
@@ -140,17 +141,29 @@ class InsideLinks(unittest.TestCase):
 
     def test_a_real_run_refuses_to_start_and_changes_nothing(self):
         before = snapshot(self.target)
-        done = run_host(self.target, apply=True)
-        self.assertEqual(done.returncode, 2)
-        self.assertIn("shortcut.pdf", done.stderr)
-        self.assertIn("nothing was moved", done.stderr)
+        for engine in ("vm", "tree"):
+            done = run_host(self.target, apply=True, engine=engine)
+            self.assertEqual(done.returncode, 1, done.stderr)      # the program refuses (std:files.is_link), not the host
+            self.assertIn("shortcut.pdf", done.stderr)
+            self.assertIn("nothing was moved", done.stderr)
+            self.assertNotIn("moved", done.stdout)
+            self.assertEqual(snapshot(self.target), before)
+        done = run_bootstrap(self.target, apply=True)
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn("nothing was moved", done.stdout + done.stderr)
         self.assertEqual(snapshot(self.target), before)
 
     def test_a_dry_run_warns_and_still_shows_the_plan(self):
         done = run_host(self.target)
         self.assertEqual(done.returncode, 0, done.stderr)
-        self.assertIn("shortcut.pdf", done.stderr)
+        self.assertIn("warning: 1 symbolic link(s)", done.stdout)
+        self.assertIn("shortcut.pdf", done.stdout)
         self.assertIn("DRY RUN", done.stdout)
+        self.assertIn("would", done.stdout)
+
+    def test_the_host_no_longer_looks_for_links(self):
+        with open(HOST_PATH) as f:
+            self.assertNotIn("islink", f.read())
 
 
 class Names(unittest.TestCase):

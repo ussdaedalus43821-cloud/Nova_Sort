@@ -10,7 +10,7 @@ Written against NovaLang v2.2.0 (`develop` at f458f1d). Entries marked **M13** a
 **Update for NovaLang 2.4 (`develop` at 34a6256):** G-030 and G-031 are closed by the standard library. `sort.nova` now
 imports `std:files` (`is_dir`) and `std:text` (`splitext`) and the hand-written versions are gone; the output and the
 resulting folder are byte for byte the same as before on all three engines (99 awkward names, dry run and real run).
-G-032 has a library route too (`std:files.is_link`), but the guard stays in `host.py` for now.
+G-032 is closed the same way: the link guard moved from `host.py` into `sort.nova` (`std:files.is_link`).
 
 **How to read an entry.** *Tried* is what was attempted and the exact result. *Workaround* says what the code does
 instead and **who does the work**: `program` (sort.nova), `host` (host.py) or `none` (cannot be done). *Probe* is a
@@ -27,7 +27,7 @@ in the program) - minor.
 | G-029 | No way to ask which capabilities were granted | FRICTION | program (probe a name) | |
 | G-030 | No `isdir` or `stat`: a folder is "a path `listdir` accepts" | FRICTION, **closed in 2.4** | `std:files.is_dir` | yes |
 | G-031 | No `splitext`/`basename`: the extension is split by hand | minor, **closed in 2.4** | `std:text.splitext` | yes |
-| G-032 | No `lstat`/`islink`: a link cannot be told from a file | BLOCKER (for links) | host | yes |
+| G-032 | No `lstat`/`islink`: a link cannot be told from a file | BLOCKER (for links), **closed in 2.4** | `std:files.is_link` | yes |
 | G-033 | The target folder can only arrive through the working directory | FRICTION | host | |
 | G-034 | The CLI reads the flag after `--bootstrap` as the program; the self-hosted engine cannot be embedded | FRICTION | tests | |
 | G-035 | No way to learn whether the file system ignores case | minor | program (assumes it does) | |
@@ -102,8 +102,10 @@ in the program) - minor.
 - **Workaround (host):** `host.py` is the one place that can tell. Before launching it looks for top-level links that
   stay inside the folder; it warns in a dry run and **refuses to start a real run** until they are removed. It
   reads the folder but never changes it. This is the only thing the launcher does other than grant and start.
-- **Suggested for M13:** `islink(path)` and `readlink(path)` under `files.read`. **2.4** has `std:files.is_link`; moving
-  the guard from `host.py` into the program is left for a later change.
+- **Closed (NovaLang 2.4):** `sort.nova` lists the folder's links with `std:files.is_link` before it moves anything. A real
+  run `throw`s (the program has no `exit` or stderr without the `process` grant, so the launcher reports "the program
+  stopped" and exits 1, where it used to exit 2); a dry run prints the warning in the plan. A link that leads out still
+  throws on `is_link` and is skipped. `host.py` no longer reads the folder at all.
 - **Probe:** `tests/test_sort.py` `InsideLinks`; `Apply.test_no_file_is_lost_duplicated_or_changed` for the outside link.
 
 ## G-033 The target folder can only arrive through the working directory - FRICTION
