@@ -3,6 +3,9 @@
 > **The second proof of concept for [NovaLang](https://github.com/ussdaedalus43821-cloud/Nova_Lang), after [Nova_Stats](https://github.com/ussdaedalus43821-cloud/Nova_Stats).**
 > It tests the **M11 security sandbox** as much as the language: a file organizer that runs in the `restricted`
 > profile with `files.read` and `files.write` for one folder and nothing else, and that must never delete a file.
+>
+> **Runs on the NovaLang 2.4 standard library:** the folder test is `std:files.is_dir` and the extension is
+> `std:text.splitext` (they were hand-written, [`docs/GAPS.md`](docs/GAPS.md) G-030, G-031). Same plan, same moves, byte for byte.
 
 It scans one folder (such as `~/Downloads`), reads each file's extension, creates category folders and moves the
 files into them. Anything it does not recognise goes to `review/`.
