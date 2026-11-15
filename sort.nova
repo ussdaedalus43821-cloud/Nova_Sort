@@ -10,6 +10,12 @@
 # Nothing here uses `remove`, `delete`, `write`, `copy` or the file form of `append`; the
 # sandbox hands all of them over with `files.write` (docs/GAPS.md G-027), so tests/test_safety.py
 # fails if one of them ever appears in this file.
+#
+# Since NovaLang 2.4 the folder test is std:files.is_dir and the extension is std:text.splitext,
+# where both used to be hand-written (G-030, G-031). The only imports are those two standard modules.
+
+import "std:files" as files
+import "std:text" as text
 
 let CATEGORIES = [
     ["Images", ["jpg", "jpeg", "png", "gif", "heic", "heif", "webp", "tif", "tiff", "bmp", "svg", "raw", "cr2", "nef", "dng", "ico"]],
@@ -46,26 +52,26 @@ def may_write() {
     }
 }
 
-# There is no isdir() (G-030): a folder is a path `listdir` accepts. A file, a path outside the
-# grant and a broken link all fail the same way, and all mean "do not touch".
+# std:files.is_dir asks the question itself (G-030 closed): a folder, or a link to one, is true;
+# a file or a missing path is false. The read grant is still judged first, so a path outside the
+# folder throws, and that, too, means "do not touch".
 def is_folder(path) {
     try {
-        listdir(path)
-        return true
+        return files.is_dir(path)
     } catch e {
         return false
     }
 }
 
-# There is no splitext()/basename() (G-031): the extension is what follows the last dot.
-# "a.tar.gz" has the extension "gz", a name with no dot, or one that ends in a dot, has none.
+# std:text.splitext (G-031 closed): "a.tar.gz" is ["a.tar", ".gz"]. The program wants the
+# extension without its dot, and a name that ends in a dot ("a.", whose splitext is ["a", "."])
+# has none, as before.
 def split_name(name) {
-    let parts = split(name, ".")
-    let last = len(parts) - 1
-    if last < 1 or parts[last] == "" {
+    let parts = text.splitext(name)
+    if parts[1] == "." or parts[1] == "" {
         return [name, ""]
     }
-    return [join(parts[:last], "."), parts[last]]
+    return [parts[0], parts[1][1:]]
 }
 
 # A symbolic link that leads outside the folder is outside the grant, so the sandbox refuses every

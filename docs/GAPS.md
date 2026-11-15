@@ -7,6 +7,11 @@ G-026), so these start at G-027 and the ecosystem has one list.
 
 Written against NovaLang v2.2.0 (`develop` at f458f1d). Entries marked **M13** are the ones to fix there.
 
+**Update for NovaLang 2.4 (`develop` at 34a6256):** G-030 and G-031 are closed by the standard library. `sort.nova` now
+imports `std:files` (`is_dir`) and `std:text` (`splitext`) and the hand-written versions are gone; the output and the
+resulting folder are byte for byte the same as before on all three engines (99 awkward names, dry run and real run).
+G-032 has a library route too (`std:files.is_link`), but the guard stays in `host.py` for now.
+
 **How to read an entry.** *Tried* is what was attempted and the exact result. *Workaround* says what the code does
 instead and **who does the work**: `program` (sort.nova), `host` (host.py) or `none` (cannot be done). *Probe* is a
 reproducible check in `tests/`; the ones marked "gap probe" pass while the gap exists and fail the day NovaLang is
@@ -20,8 +25,8 @@ in the program) - minor.
 | G-027 | `files.write` also grants `remove` and `delete` | LIMIT | program rule + test | yes |
 | G-028 | `rename` silently replaces an existing file | LIMIT | program (`exists` first) | yes |
 | G-029 | No way to ask which capabilities were granted | FRICTION | program (probe a name) | |
-| G-030 | No `isdir` or `stat`: a folder is "a path `listdir` accepts" | FRICTION | program | yes |
-| G-031 | No `splitext`/`basename`: the extension is split by hand | minor | program | yes |
+| G-030 | No `isdir` or `stat`: a folder is "a path `listdir` accepts" | FRICTION, **closed in 2.4** | `std:files.is_dir` | yes |
+| G-031 | No `splitext`/`basename`: the extension is split by hand | minor, **closed in 2.4** | `std:text.splitext` | yes |
 | G-032 | No `lstat`/`islink`: a link cannot be told from a file | BLOCKER (for links) | host | yes |
 | G-033 | The target folder can only arrive through the working directory | FRICTION | host | |
 | G-034 | The CLI reads the flag after `--bootstrap` as the program; the self-hosted engine cannot be embedded | FRICTION | tests | |
@@ -72,7 +77,10 @@ in the program) - minor.
 - **Workaround (program):** `is_folder()`. A file fails with `FileError: ... is a file, not a directory`, a link that
   leads outside the grant fails with `... is outside the folders this program may use`: both "not a folder", told
   apart only by the message text, which the program does not parse.
-- **Probe:** `tests/test_safety.py` `test_G030_listdir_cannot_tell_a_file_from_a_refused_path` (gap probe).
+- **Closed (NovaLang 2.4):** `is_folder()` is now `std:files.is_dir` inside `try`: true for a folder or a link to one,
+  false for a file. The read grant is still judged first, so a path outside the folder throws and is "do not touch".
+- **Probe:** `tests/test_safety.py` `test_G030_listdir_cannot_tell_a_file_from_a_refused_path` (gap probe; it still
+  passes, because `listdir` itself is unchanged - the answer is the library, not `listdir`).
 
 ## G-031 No `splitext`/`basename`: how hard is an extension without regex? - minor (M13)
 - **Tried:** `split(name, ".")`, then the last piece. It was **not hard**: `split_name()` is eight lines and needs no
@@ -81,7 +89,8 @@ in the program) - minor.
   with a dot is hidden and skipped before the question comes up.
 - **What is missing:** the name of a path (`dirname` exists, `basename` does not) and `splitext`. A compound
   extension (`.tar.gz` as one unit) is not distinguished; here it does not matter because both parts are archives.
-- **Workaround (program):** `split_name()` returns `[stem, extension]`, also used to number a taken name.
+- **Closed (NovaLang 2.4):** `split_name()` is `std:text.splitext` with the dot dropped. `splitext("a.")` is
+  `["a", "."]`, which the program reads as "no extension" as before, so a taken `a.` is still numbered `a. (2)`.
 - **Probe:** `tests/test_sort.py` (`EXPECTED` in `tests/common.py` covers upper-case, dotted, spaced, accented,
   no-extension and trailing-dot names).
 
@@ -93,7 +102,8 @@ in the program) - minor.
 - **Workaround (host):** `host.py` is the one place that can tell. Before launching it looks for top-level links that
   stay inside the folder; it warns in a dry run and **refuses to start a real run** until they are removed. It
   reads the folder but never changes it. This is the only thing the launcher does other than grant and start.
-- **Suggested for M13:** `islink(path)` and `readlink(path)` under `files.read`.
+- **Suggested for M13:** `islink(path)` and `readlink(path)` under `files.read`. **2.4** has `std:files.is_link`; moving
+  the guard from `host.py` into the program is left for a later change.
 - **Probe:** `tests/test_sort.py` `InsideLinks`; `Apply.test_no_file_is_lost_duplicated_or_changed` for the outside link.
 
 ## G-033 The target folder can only arrive through the working directory - FRICTION
