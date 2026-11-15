@@ -137,11 +137,39 @@ def line(verb, text) {
     print("  " + verb + " " * (8 - len(verb)) + text)
 }
 
+# A symbolic link that stays inside the folder looks like an ordinary name, and moving it would
+# leave it pointing at nothing (G-032). std:files.is_link sees it; a link that leads out is refused
+# by the sandbox (the call throws) and is skipped further down, as before. A real run refuses to
+# start while one is there, before anything is moved; a dry run warns and still shows the plan.
+def links_inside() {
+    let found = []
+    for name in sorted(listdir(".")) {
+        try {
+            if files.is_link(name) {
+                found = found + [name]
+            }
+        } catch e {
+        }
+    }
+    return found
+}
+
 let apply = may_write()
+let inside_links = links_inside()
+let link_warning = ""
+if len(inside_links) > 0 {
+    link_warning = str(len(inside_links)) + " symbolic link(s) here lead to somewhere inside this folder and would break if moved: " + join(inside_links, ", ")
+}
+if apply and link_warning != "" {
+    throw(link_warning + "; nothing was moved. Remove or replace the link(s), then run again.")
+}
 if apply {
     print("Nova_Sort: moving files (files.read and files.write granted)")
 } else {
     print("Nova_Sort: DRY RUN. Nothing is moved, and with only files.read granted nothing could be.")
+    if link_warning != "" {
+        print("Nova_Sort: warning: " + link_warning + ". A real run will refuse to start.")
+    }
 }
 
 let folder_state = {}

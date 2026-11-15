@@ -29,17 +29,6 @@ def main(arguments):
     if not os.path.isdir(folder):
         print("Nova_Sort: %s is not a folder" % positional[0], file=sys.stderr)
         return 2
-    # The program cannot tell a link from a file (docs/GAPS.md G-032). A link that leads outside the
-    # folder is refused by the sandbox and skipped, but a relative link to something inside would be
-    # moved and left pointing at nothing, so a real run refuses to start while one is there.
-    inside_links = [name for name in sorted(os.listdir(folder)) if os.path.islink(os.path.join(folder, name))
-                    and (os.path.realpath(os.path.join(folder, name)) + os.sep).startswith(folder + os.sep)]
-    if inside_links:
-        print("Nova_Sort: %d symbolic link(s) here lead to somewhere inside this folder and would break "
-              "if moved: %s" % (len(inside_links), ", ".join(inside_links)), file=sys.stderr)
-        if apply:
-            print("Nova_Sort: nothing was moved. Remove or replace the link(s), then run again.", file=sys.stderr)
-            return 2
     program = os.path.join(HERE, "sort.nova")
     os.chdir(folder)
     grants = {"read": [folder]}

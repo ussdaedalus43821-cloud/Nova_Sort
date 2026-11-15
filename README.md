@@ -43,7 +43,8 @@ To move them, run again with --apply.
 - **Leaves alone:** hidden files, folders (nothing recurses), unfinished downloads (`.crdownload`, `.part`, `.download`,
   `.tmp`), and symbolic links that lead outside the folder.
 - **Refuses a real run** while a link that points to somewhere inside the folder is there, because moving it would
-  break it ([`docs/GAPS.md`](docs/GAPS.md) G-032).
+  break it ([`docs/GAPS.md`](docs/GAPS.md) G-032). The program itself finds them with `std:files.is_link`, before it
+  moves anything; a dry run warns and still shows the plan.
 - **Never deletes.** See below.
 
 ## How the sandbox is used
@@ -66,7 +67,7 @@ path checks (`..`, other folders and links that lead out are refused).
 | Path | Role |
 | --- | --- |
 | `sort.nova` | the program: scan, classify, plan, move |
-| `host.py` | the launcher: grants the sandbox, starts the program, checks for links |
+| `host.py` | the launcher: grants the sandbox and starts the program |
 | `docs/GAPS.md` | every gap found (G-027 to G-035) and what worked |
 | `tests/` | 26 tests: behaviour, safety, the sandbox, and gap probes, on all three engines |
 | `novalang/` | the interpreter, copied unmodified (see `novalang/VENDORED.md`) |
