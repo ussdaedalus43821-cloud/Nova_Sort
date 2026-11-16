@@ -87,3 +87,15 @@ that nothing outside the folder changes, and that a second run does nothing.
 One folder, one level; no undo (the printed plan is the record); no stamping or logging (the program has no clock
 and no write); it assumes a case-insensitive file system and numbers a name it did not need to on a case-sensitive
 one (G-035). A dry run on a folder is a plan for that moment: another process can change the folder before `--apply`.
+
+## License
+
+Licensed under either of
+
+- Apache License, Version 2.0 ([`LICENSE-APACHE`](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
+- MIT license ([`LICENSE-MIT`](LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
+
+at your option. The SPDX identifier is `MIT OR Apache-2.0`, the same as [NovaLang](https://github.com/ussdaedalus43821-cloud/Nova_Lang).
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in Nova_Sort by you, as defined in the
+Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
